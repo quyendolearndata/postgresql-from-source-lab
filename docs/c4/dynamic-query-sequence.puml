@@ -1,0 +1,50 @@
+@startuml postgres-dynamic-query-sequence
+' Dynamic view (sequence) — KHÔNG phải C4 Level 4 (Code).
+' Mô tả Simple Query path sau khi backend session đã tồn tại.
+
+title PostgreSQL — Path of a Query (sequence)\n(sau khi connect; backend đã được fork)
+
+actor "Client\n(psql + libpq)" as Client
+participant "Backend\nprotocol I/O" as BeProto
+participant "tcop" as Tcop
+participant "Parser" as Parser
+participant "Rewriter" as Rewrite
+participant "Planner" as Opt
+participant "Executor" as Exec
+participant "Access +\nStorage" as Store
+
+== Session đã có (postmaster đã fork backend) ==
+
+Client -> BeProto : Query message\n(SQL text)
+BeProto -> Tcop : exec_simple_query()
+Tcop -> Parser : parse + analyze
+Parser --> Tcop : Query tree
+Tcop -> Rewrite : rewrite (views/rules)
+Rewrite --> Tcop : rewritten Query
+Tcop -> Opt : planner()
+Opt --> Tcop : Plan tree
+Tcop -> Exec : ExecutorRun()
+Exec -> Store : lấy / sửa pages & tuples
+Store --> Exec : tuples
+Exec --> Tcop : result
+Tcop --> BeProto : RowDescription / DataRow / …
+BeProto --> Client : result set
+
+note right of Opt
+  Source gợi ý:
+  backend/libpq (protocol server)
+  tcop/postgres.c
+  parser/
+  rewrite/
+  optimizer/plan/planner.c
+  executor/execMain.c
+  access/ + storage/
+end note
+
+note left of Client
+  Bước connect (không vẽ ở đây):
+  Client → postmaster → fork backend
+  rồi mới tới sequence này.
+end note
+
+@enduml

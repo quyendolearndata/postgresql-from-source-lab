@@ -1,0 +1,40 @@
+@startuml postgres-c3-components
+' C4 Level 3 — Components bên trong một Backend Session
+' Tập trung Path of a Query (SELECT/DML thông thường).
+' Utility commands (VACUUM, …) còn đi qua commands/ — cố ý chưa vẽ hết.
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title PostgreSQL Backend — C3 Components (một Backend Session)
+
+Container_Boundary(backend, "Backend Session process (src/backend)") {
+    Component(be_libpq, "Backend protocol I/O", "C", "Nhận/gửi message FE/BE phía server.\nKHÁC libpq client.\nsrc/backend/libpq")
+    Component(tcop, "tcop", "C", "Traffic cop: điều phối parse→rewrite→plan→execute\ntcop/")
+    Component(parser, "Parser", "C", "SQL text → parse tree → analyzed Query\nparser/")
+    Component(rewrite, "Rewriter", "C", "Views / rules\nrewrite/")
+    Component(optimizer, "Optimizer / Planner", "C", "Paths, cost model, chọn Plan\noptimizer/")
+    Component(executor, "Executor", "C", "Chạy Plan (iterator / next())\nexecutor/")
+    Component(catalog, "Catalog", "C", "Định nghĩa system catalog + hỗ trợ\ncatalog/")
+    Component(cache, "Catalog / relcache", "C", "Cache metadata trong session\nutils/cache/")
+    Component(access, "Access Methods", "C", "Heap, indexes, transam (MVCC, XLogInsert…)\naccess/")
+    Component(storage, "Storage", "C", "Buffer pool, pages, locks, file/WAL I/O thấp\nstorage/")
+    Component(utils, "Utils", "C", "Memory context, errors, fmgr, ADTs…\nutils/")
+}
+
+Rel(be_libpq, tcop, "đưa query / portal tới tcop")
+Rel(tcop, parser, "parse + analyze")
+Rel(tcop, rewrite, "rewrite")
+Rel(tcop, optimizer, "plan")
+Rel(tcop, executor, "execute")
+Rel(parser, cache, "tra tên / kiểu / OID")
+Rel(optimizer, cache, "stats / metadata")
+Rel(cache, catalog, "đọc định nghĩa catalog khi cần")
+Rel(executor, access, "scan / insert / update / delete tuples")
+Rel(access, storage, "pin buffer, khóa, I/O trang / WAL")
+Rel_D(tcop, utils, "memory / error reporting")
+Rel_D(executor, utils, "gọi hàm / kiểu dữ liệu")
+
+SHOW_LEGEND()
+@enduml

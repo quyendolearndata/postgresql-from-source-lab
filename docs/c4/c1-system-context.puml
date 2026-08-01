@@ -1,0 +1,26 @@
+@startuml postgres-c1-system-context
+' C4 Level 1 — System Context
+' Ranh giới: PostgreSQL như một hệ thống; client / OS / replica là bên ngoài.
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title PostgreSQL — C1 System Context
+
+Person(app_dev, "Developer / App", "Gửi SQL và nhận kết quả qua client (psql, JDBC, driver…)")
+
+System(postgres, "PostgreSQL", "Object-relational DBMS: parse/plan/execute SQL, MVCC, WAL, storage, replication")
+
+System_Ext(os, "OS / Filesystem", "Process, shared memory, file I/O; thư mục PGDATA và WAL trên disk")
+
+System_Ext(replica, "Replica / Standby", "Instance PostgreSQL khác; nhận WAL (physical) hoặc logical replication")
+
+' Wire protocol chuẩn: Frontend/Backend Protocol.
+' libpq / JDBC / … chỉ là các client triển khai protocol đó.
+Rel(app_dev, postgres, "SQL + kết quả", "PostgreSQL Frontend/Backend Protocol\n(thường TCP :5432)")
+Rel(postgres, os, "files, shared memory, fork processes", "POSIX / OS APIs")
+Rel(postgres, replica, "nhân bản dữ liệu / thay đổi", "WAL stream / logical decode")
+
+SHOW_LEGEND()
+@enduml
