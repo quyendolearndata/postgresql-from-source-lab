@@ -1,0 +1,45 @@
+@startuml postgres-c2-deployment
+' Deployment view — process thật trên một host
+' Nhấn mạnh: libpq trong client; query sau connect do backend phục vụ.
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+LAYOUT_WITH_LEGEND()
+
+title PostgreSQL — C2 Deployment (processes trên Host)
+
+Deployment_Node(host, "Host", "macOS / Linux") {
+
+    Deployment_Node(client_node, "Client address space", "user process") {
+        Container(psql, "psql / App", "process", "Client tool hoặc application\nsrc/bin/psql (nếu dùng psql)")
+        Container(libpq, "libpq", "shared library", "Link vào process client\nsrc/interfaces/libpq")
+    }
+
+    Deployment_Node(server_node, "Server processes", "cùng binary postgres") {
+        Container(postmaster, "postmaster", "process", "Supervisor + accept connections\nsrc/backend/postmaster")
+        Container(backend, "backend", "process", "1 connection = 1 process\nquery pipeline sống ở đây")
+        Container(aux, "bgwriter / checkpointer / …", "processes", "Background workers")
+    }
+
+    Deployment_Node(memory_node, "IPC", "kernel-backed memory") {
+        ContainerDb(shm, "Shared Memory", "mmap / SysV", "shared_buffers, locks, WAL buffers")
+    }
+
+    Deployment_Node(disk_node, "Disk", "filesystem") {
+        ContainerDb(pgdata, "PGDATA", "directory", "base/ · global/ · pg_wal/ · pg_xact/")
+    }
+}
+
+Rel(psql, libpq, "gọi hàm thư viện")
+Rel(libpq, postmaster, "1. connect + handshake", "TCP :5432")
+Rel(postmaster, backend, "2. fork() + handoff connection")
+Rel(libpq, backend, "3. Query / Parse / Bind / …\nvà nhận kết quả", "cùng session TCP")
+Rel(postmaster, aux, "launch")
+Rel(backend, shm, "map + access")
+Rel(aux, shm, "maintain")
+Rel(postmaster, shm, "tạo / sở hữu vùng shared\n(startup)")
+Rel(backend, pgdata, "heap / index I/O\n(qua buffers)")
+Rel(aux, pgdata, "checkpoint / WAL flush")
+
+SHOW_LEGEND()
+@enduml

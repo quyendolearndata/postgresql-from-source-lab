@@ -1,0 +1,44 @@
+@startuml postgres-c2-containers
+' C4 Level 2 — Containers (runtime)
+' Boundary "PostgreSQL Cluster" = process + bộ nhớ chia sẻ + PGDATA của server.
+' libpq nằm NGOÀI cluster vì nó chạy trong process client.
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title PostgreSQL — C2 Containers (runtime)
+
+Person(client_user, "Client User / App", "Người hoặc ứng dụng mở kết nối SQL")
+
+' Client-side (không phải process trong cluster)
+Container(libpq, "libpq (hoặc driver khác)", "C library / driver", "Chạy trong process client.\nNói Frontend/Backend Protocol.\nVí dụ triển khai: src/interfaces/libpq")
+
+Container(tools, "Admin Tools", "CLI processes", "initdb, pg_ctl, pg_dump…\nProcess riêng; một số đụng PGDATA trực tiếp,\nmột số nói chuyện qua protocol.\nsrc/bin")
+
+System_Boundary(pg, "PostgreSQL Cluster (server runtime)") {
+    Container(postmaster, "Postmaster", "OS process", "Listen port, chấp nhận kết nối,\nauthenticate, fork backend, launch aux.\nKHÔNG chạy SQL của session.\nsrc/backend/postmaster")
+    Container(backend, "Backend Session", "OS process", "1 process / 1 connection.\nChạy query pipeline (parse→…→execute).\nsrc/backend")
+    Container(aux, "Aux Processes", "OS processes", "bgwriter, checkpointer, walwriter,\nautovacuum launcher/workers…\nBảo trì buffer/WAL/vacuum")
+    ContainerDb(shm, "Shared Memory", "mmap / SysV SHM", "shared_buffers, locks, WAL buffers,\nproc array… — map vào postmaster/backend/aux.\nsrc/backend/storage/ipc")
+    ContainerDb(pgdata, "PGDATA", "Filesystem directory", "base/, global/, pg_wal/, pg_xact/…\nHeap, indexes, WAL bền vững trên disk")
+}
+
+' 1) Kết nối ban đầu → postmaster
+Rel(client_user, libpq, "gọi API client", "libpq / JDBC / …")
+Rel(libpq, postmaster, "1. mở kết nối + bắt tay", "TCP :5432\n(Frontend/Backend Protocol)")
+
+' 2) Sau fork, session thuộc backend
+Rel(postmaster, backend, "2. fork() + bàn giao socket/session")
+Rel_D(libpq, backend, "3. gửi SQL / nhận rows\n(sau khi session đã tạo)", "cùng TCP connection\n(giờ do backend phục vụ)")
+
+Rel(postmaster, aux, "khởi động worker")
+Rel(backend, shm, "đọc/ghi cấu trúc dùng chung")
+Rel(aux, shm, "duy trì buffer / WAL / …")
+Rel(backend, pgdata, "đọc/ghi heap & index\n(qua buffer pool)")
+Rel(aux, pgdata, "checkpoint, flush WAL, …")
+Rel(tools, pgdata, "initdb / backup / restore files")
+Rel(tools, libpq, "một số tool dùng protocol\n(ví dụ pg_dump)", "optional")
+
+SHOW_LEGEND()
+@enduml
